@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
@@ -29,7 +31,8 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
   late final TextEditingController _searchController;
   late String _pendingSearch;
   List<Item> _items = [];
-  bool _loadingItems = false;
+  Future<void>? _itemsLoad;
+  bool _sheetOpen = false;
 
   static final _dateFormat = DateFormat('dd/MM/yyyy');
 
@@ -41,16 +44,18 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
     _loadItems();
   }
 
-  Future<void> _loadItems() async {
-    if (_loadingItems) return;
-    setState(() => _loadingItems = true);
+  /// Muat daftar barang untuk pilihan filter. Pemanggilan yang bersamaan
+  /// memakai satu permintaan yang sama, jadi `await` selalu menunggu hasilnya.
+  Future<void> _loadItems() {
+    return _itemsLoad ??= _fetchItems().whenComplete(() => _itemsLoad = null);
+  }
+
+  Future<void> _fetchItems() async {
     try {
       final items = await widget.loadItems();
       if (mounted) setState(() => _items = items);
     } catch (_) {
-      if (mounted) setState(() => _items = []);
-    } finally {
-      if (mounted) setState(() => _loadingItems = false);
+      // Biarkan daftar terakhir yang berhasil dimuat tetap dipakai.
     }
   }
 
@@ -82,15 +87,28 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
   }
 
   Future<void> _openSheet() async {
-    await _loadItems();
-    if (!mounted) return;
-    final result = await showModalBottomSheet<TransactionFilter>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _FilterSheet(filter: widget.filter, items: _items),
-    );
-    if (result != null) widget.onChanged(result);
+    // Abaikan ketukan berikutnya selama form filter sedang dibuka/terbuka.
+    if (_sheetOpen) return;
+    _sheetOpen = true;
+    try {
+      if (_items.isEmpty) {
+        await _loadItems();
+      } else {
+        // Sudah ada data: buka langsung, segarkan di latar belakang.
+        unawaited(_loadItems());
+      }
+      if (!mounted) return;
+      final result = await showModalBottomSheet<TransactionFilter>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) =>
+            _FilterSheet(filter: widget.filter, items: _items),
+      );
+      if (result != null && mounted) widget.onChanged(result);
+    } finally {
+      _sheetOpen = false;
+    }
   }
 
   @override
@@ -111,9 +129,8 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
       chips.add(
         _FilterChip(
           label: '$from – $to',
-          onDelete: () => widget.onChanged(
-            filter.copyWith(clearFrom: true, clearTo: true),
-          ),
+          onDelete: () =>
+              widget.onChanged(filter.copyWith(clearFrom: true, clearTo: true)),
         ),
       );
     }
@@ -121,8 +138,7 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
       chips.add(
         _FilterChip(
           label: selectedItem.name,
-          onDelete: () =>
-              widget.onChanged(filter.copyWith(clearItemId: true)),
+          onDelete: () => widget.onChanged(filter.copyWith(clearItemId: true)),
         ),
       );
     }
@@ -225,32 +241,37 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(left: 12, right: 4),
-      decoration: BoxDecoration(
-        color: context.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: context.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+    // Seluruh chip bisa diketuk untuk menghapus filter, bukan hanya ikon X.
+    return Semantics(
+      button: true,
+      label: 'Hapus filter $label',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onDelete,
+        child: Container(
+          padding: const EdgeInsets.only(left: 12, right: 4),
+          decoration: BoxDecoration(
+            color: context.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
           ),
-          InkWell(
-            onTap: onDelete,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(PhosphorIcons.x, size: 14, color: context.primary),
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: context.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(PhosphorIcons.x, size: 14, color: context.primary),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -342,10 +363,9 @@ class _FilterSheetState extends State<_FilterSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant
-                        .withValues(alpha: 0.4),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

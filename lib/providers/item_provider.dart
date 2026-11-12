@@ -15,10 +15,10 @@ class ItemProvider extends ChangeNotifier {
     CategoryService? categoryService,
     RoomService? roomService,
     DashboardService? dashboardService,
-  })  : _itemService = itemService ?? ItemService(),
-        _categoryService = categoryService ?? CategoryService(),
-        _roomService = roomService ?? RoomService(),
-        _dashboardService = dashboardService ?? DashboardService();
+  }) : _itemService = itemService ?? ItemService(),
+       _categoryService = categoryService ?? CategoryService(),
+       _roomService = roomService ?? RoomService(),
+       _dashboardService = dashboardService ?? DashboardService();
 
   final ItemService _itemService;
   final CategoryService _categoryService;
@@ -30,6 +30,8 @@ class ItemProvider extends ChangeNotifier {
   List<Room> _rooms = [];
   DashboardData? _dashboard;
   bool _loading = false;
+  bool _dashboardLoading = false;
+  int _itemsRequest = 0;
   bool _hasMore = false;
   int _page = 1;
   String _search = '';
@@ -41,12 +43,15 @@ class ItemProvider extends ChangeNotifier {
   List<Room> get rooms => _rooms;
   DashboardData? get dashboard => _dashboard;
   bool get loading => _loading;
+  bool get dashboardLoading => _dashboardLoading;
   bool get hasMore => _hasMore;
   bool get lowStockOnly => _lowStockOnly;
   String? get error => _error;
 
   Future<void> loadItems({bool refresh = false}) async {
-    if (_loading) return;
+    // Muat halaman berikutnya diabaikan bila masih memuat; refresh selalu jalan.
+    if (_loading && !refresh) return;
+    final request = ++_itemsRequest;
     _loading = true;
     _error = null;
     if (refresh) {
@@ -62,14 +67,18 @@ class ItemProvider extends ChangeNotifier {
         page: _page,
         perPage: 15,
       );
+      // Ada permintaan yang lebih baru: buang hasil lama ini.
+      if (request != _itemsRequest) return;
       _items = refresh ? items : [..._items, ...items];
       _hasMore = hasMore;
       _page++;
     } catch (e) {
-      _error = e.toString();
+      if (request == _itemsRequest) _error = e.toString();
     } finally {
-      _loading = false;
-      notifyListeners();
+      if (request == _itemsRequest) {
+        _loading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -86,7 +95,10 @@ class ItemProvider extends ChangeNotifier {
 
   Future<void> loadReferences() async {
     try {
-      final results = await Future.wait([_categoryService.all(), _roomService.all()]);
+      final results = await Future.wait([
+        _categoryService.all(),
+        _roomService.all(),
+      ]);
       _categories = results[0] as List<Category>;
       _rooms = results[1] as List<Room>;
       notifyListeners();
@@ -94,12 +106,16 @@ class ItemProvider extends ChangeNotifier {
   }
 
   Future<List<Item>> fetchAllItems() async {
-    final (items, _) = await _itemService.all(search: '', page: 1, perPage: 1000);
+    final (items, _) = await _itemService.all(
+      search: '',
+      page: 1,
+      perPage: 1000,
+    );
     return items;
   }
 
   Future<DashboardData> loadDashboard() async {
-    _loading = true;
+    _dashboardLoading = true;
     _error = null;
     notifyListeners();
     try {
@@ -109,7 +125,7 @@ class ItemProvider extends ChangeNotifier {
       _error = e.toString();
       rethrow;
     } finally {
-      _loading = false;
+      _dashboardLoading = false;
       notifyListeners();
     }
   }

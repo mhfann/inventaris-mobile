@@ -187,7 +187,7 @@ class _DashboardTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (provider.loading && provider.dashboard == null) {
+    if (provider.dashboardLoading && provider.dashboard == null) {
       return const LoadingWidget(text: 'Memuat dashboard...');
     }
     if (error != null) {

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/custom_snackbar.dart';
 import '../../models/user.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/loading_widget.dart';
@@ -22,11 +23,30 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<UserProvider>().loadUsers();
     });
   }
 
+  Future<void> _refresh() async {
+    final provider = context.read<UserProvider>();
+    await provider.loadUsers();
+    if (!mounted) return;
+    if (provider.error != null && provider.users.isNotEmpty) {
+      _showSnack(provider.error!, isError: true);
+    }
+  }
+
   Future<void> _confirmDelete(User user) async {
+    final me = context.read<AuthProvider>().user;
+    if (me != null && me.id == user.id) {
+      _showSnack(
+        'Anda tidak bisa menghapus akun yang sedang dipakai',
+        isError: true,
+      );
+      return;
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -100,7 +120,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               onRetry: () => provider.loadUsers(),
             )
           : RefreshIndicator(
-              onRefresh: () => provider.loadUsers(),
+              onRefresh: _refresh,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                 children: [
@@ -136,7 +156,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             color: context.colors.onSurfaceVariant,
                           ),
                           const SizedBox(height: 8),
-                          Text('Belum ada user'),
+                          const Text('Belum ada user'),
                         ],
                       ),
                     )
@@ -345,6 +365,8 @@ class _UserFormSheet extends StatefulWidget {
 }
 
 class _UserFormSheetState extends State<_UserFormSheet> {
+  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -352,6 +374,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   final Set<String> _selectedRoles = {};
 
   bool _loading = false;
+  String? _error;
 
   bool get isEdit => widget.user != null;
 
@@ -374,6 +397,7 @@ class _UserFormSheetState extends State<_UserFormSheet> {
   }
 
   Future<void> _submit() async {
+    if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
 
     final provider = context.read<UserProvider>();
@@ -388,7 +412,10 @@ class _UserFormSheetState extends State<_UserFormSheet> {
       payload['password_confirmation'] = password;
     }
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       if (isEdit) {
         await provider.updateUser(widget.user!.id, payload);
@@ -402,9 +429,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        showAppSnackBar(context, e.toString(), type: AppSnackType.error);
-      }
+      // Snackbar tertutup bottom sheet, jadi error ditampilkan di dalam sheet.
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -448,6 +474,32 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 16),
+                if (_error != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: context.danger.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          PhosphorIcons.warningCircle,
+                          size: 20,
+                          color: context.danger,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: TextStyle(color: context.danger),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(labelText: 'Nama'),
@@ -460,10 +512,9 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(labelText: 'Email'),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Email wajib diisi';
-                    }
-                    if (!v.contains('@')) {
+                    final value = (v ?? '').trim();
+                    if (value.isEmpty) return 'Email wajib diisi';
+                    if (!_emailPattern.hasMatch(value)) {
                       return 'Email tidak valid';
                     }
                     return null;
@@ -478,11 +529,12 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                         ? 'Password (kosongkan jika tidak diubah)'
                         : 'Password',
                   ),
-                  validator: isEdit
-                      ? null
-                      : (v) => v == null || v.length < 8
-                            ? 'Minimal 8 karakter'
-                            : null,
+                  validator: (v) {
+                    final value = v ?? '';
+                    if (isEdit && value.isEmpty) return null;
+                    if (value.length < 8) return 'Minimal 8 karakter';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 Text('Peran', style: Theme.of(context).textTheme.titleSmall),

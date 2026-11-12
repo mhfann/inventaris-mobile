@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/item.dart';
-import '../../models/room.dart';
 import '../../providers/item_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../widgets/search_select_field.dart';
@@ -23,11 +23,12 @@ class TransactionFormScreen extends StatefulWidget {
 
 class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
 
   late String _date;
   int? _itemId;
   final _quantityController = TextEditingController(text: '1');
-  Room? _destinationRoom;
+  int? _destinationRoomId;
   final _descriptionController = TextEditingController();
 
   bool _submitting = false;
@@ -48,25 +49,43 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   Future<void> _loadItems() async {
     final provider = context.read<ItemProvider>();
+
+    // Referensi (ruangan) dimuat terpisah agar tidak ikut gagal bila barang gagal.
+    if (!provider.referencesLoading) {
+      provider.loadReferences().catchError((_) {});
+    }
+
     try {
       final items = await provider.fetchAllItems();
-      await provider.loadReferences();
-      if (mounted) {
-        setState(() {
-          _allItems = items;
-          _loadingItems = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingItems = false);
+      if (!mounted) return;
+      setState(() {
+        _allItems = items;
+        _loadingItems = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingItems = false;
+        _serverError = 'Gagal memuat daftar barang: $e';
+      });
     }
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _quantityController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  void _scrollToTop() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _pickDate() async {
@@ -86,9 +105,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
     if (_itemId == null) {
       setState(() => _serverError = 'Silakan pilih barang.');
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTop());
       return;
     }
 
@@ -98,7 +119,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     });
 
     final provider = context.read<TransactionProvider>();
-    final quantity = int.tryParse(_quantityController.text) ?? 1;
+    final rooms = context.read<ItemProvider>().rooms;
+    final quantity = int.tryParse(_quantityController.text.trim()) ?? 1;
+    final destinationName = _destinationRoomId == null
+        ? null
+        : rooms.where((r) => r.id == _destinationRoomId).firstOrNull?.name;
+    final description = _descriptionController.text.trim();
 
     try {
       if (_isIncoming) {
@@ -106,24 +132,23 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           itemId: _itemId!,
           date: _date,
           quantity: quantity,
-          description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+          description: description.isEmpty ? null : description,
         );
       } else {
         await provider.storeOutgoing(
           itemId: _itemId!,
           date: _date,
           quantity: quantity,
-          destination: _destinationRoom?.name,
-          description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+          destination: destinationName,
+          description: description.isEmpty ? null : description,
         );
       }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) setState(() => _serverError = e.toString());
+      if (mounted) {
+        setState(() => _serverError = e.toString());
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTop());
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -152,6 +177,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         ? null
         : _allItems.where((i) => i.id == _itemId).firstOrNull;
     final selectedUnit = selectedItem?.unit;
+    final roomValue = provider.rooms.any((r) => r.id == _destinationRoomId)
+        ? _destinationRoomId
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -161,6 +189,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ),
       body:
           SingleChildScrollView(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 child: Form(
                   key: _formKey,
@@ -251,13 +280,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                             child: TextFormField(
                               controller: _quantityController,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               decoration: InputDecoration(
                                 labelText: selectedUnit != null
                                     ? 'Jumlah ($selectedUnit)'
                                     : 'Jumlah',
                               ),
                               validator: (v) {
-                                final n = int.tryParse(v ?? '');
+                                final n = int.tryParse((v ?? '').trim());
                                 if (n == null || n < 1) return 'Min. 1';
                                 final item = selectedItem;
                                 if (!_isIncoming &&
@@ -290,7 +322,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'Stok saat ini: ${selectedItem.stock} ${selectedItem.unit}',
+                                    'Stok saat ini: ${selectedItem.stock} ${selectedItem.unit ?? ''}'
+                                        .trim(),
                                     style: TextStyle(color: context.primary),
                                   ),
                                 ),
@@ -300,9 +333,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         ],
                       if (!_isIncoming) ...[
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<Room>(
+                        DropdownButtonFormField<int>(
+                          key: ValueKey('tujuan-${provider.rooms.length}'),
                           isExpanded: true,
-                          initialValue: _destinationRoom,
+                          initialValue: roomValue,
                           decoration: const InputDecoration(
                             labelText: 'Tujuan',
                           ),
@@ -310,13 +344,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                           items: provider.rooms
                               .map(
                                 (r) => DropdownMenuItem(
-                                  value: r,
+                                  value: r.id,
                                   child: Text(r.name),
                                 ),
                               )
                               .toList(),
                           onChanged: (v) =>
-                              setState(() => _destinationRoom = v),
+                              setState(() => _destinationRoomId = v),
                         ),
                       ],
                       _buildSection('CATATAN'),

@@ -35,6 +35,7 @@ class SearchSelectField<T> extends StatelessWidget {
         itemBuilder: itemBuilder,
       ),
     );
+    if (!context.mounted) return;
     if (result != null) onChanged(result);
   }
 
@@ -105,6 +106,7 @@ class _SearchSheetState<T> extends State<_SearchSheet<T>> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final filtered = _filtered;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
@@ -148,14 +150,14 @@ class _SearchSheetState<T> extends State<_SearchSheet<T>> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: _filtered.isEmpty
+              child: filtered.isEmpty
                   ? const Center(child: Text('Tidak ada hasil'))
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _filtered.length,
+                      itemCount: filtered.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        final item = _filtered[index];
+                        final item = filtered[index];
                         return InkWell(
                           onTap: () => Navigator.of(context).pop(item),
                           child: Padding(

@@ -4,6 +4,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/custom_snackbar.dart';
 import '../../models/incoming_item.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/item_provider.dart';
@@ -22,12 +23,48 @@ class IncomingScreen extends StatefulWidget {
 }
 
 class _IncomingScreenState extends State<IncomingScreen> {
+  bool _loadingMore = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TransactionProvider>().loadIncoming();
+      if (!mounted) return;
+      context.read<TransactionProvider>().loadIncoming(refresh: true);
     });
+  }
+
+  /// Muat halaman berikutnya di luar fase build.
+  void _loadMore() {
+    if (_loadingMore) return;
+    _loadingMore = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _loadingMore = false;
+        return;
+      }
+      final provider = context.read<TransactionProvider>();
+      try {
+        if (provider.incomingHasMore && !provider.incomingLoading) {
+          await provider.loadIncoming(refresh: false);
+        }
+      } finally {
+        _loadingMore = false;
+      }
+    });
+  }
+
+  Future<void> _refresh() async {
+    final provider = context.read<TransactionProvider>();
+    await provider.loadIncoming(refresh: true);
+    if (!mounted) return;
+    if (provider.incomingError != null && provider.incoming.isNotEmpty) {
+      showAppSnackBar(
+        context,
+        provider.incomingError!,
+        type: AppSnackType.error,
+      );
+    }
   }
 
   @override
@@ -38,7 +75,7 @@ class _IncomingScreenState extends State<IncomingScreen> {
     final isEmptyByFilter =
         provider.incoming.isEmpty &&
         !provider.incomingFilter.isEmpty &&
-        !provider.loading;
+        !provider.incomingLoading;
 
     return Scaffold(
       body: Column(
@@ -50,12 +87,12 @@ class _IncomingScreenState extends State<IncomingScreen> {
             onChanged: (f) => provider.setIncomingFilter(f),
           ),
           Expanded(
-            child: provider.loading && provider.incoming.isEmpty
+            child: provider.incomingLoading && provider.incoming.isEmpty
                 ? const LoadingWidget(text: 'Memuat barang masuk...')
-                : provider.error != null && provider.incoming.isEmpty
+                : provider.incomingError != null && provider.incoming.isEmpty
                 ? ErrorView(
-                    message: provider.error!,
-                    onRetry: () => provider.loadIncoming(),
+                    message: provider.incomingError!,
+                    onRetry: () => provider.loadIncoming(refresh: true),
                   )
                 : provider.incoming.isEmpty
                 ? Center(
@@ -66,12 +103,25 @@ class _IncomingScreenState extends State<IncomingScreen> {
                     ),
                   )
                 : RefreshIndicator(
-                    onRefresh: () => provider.loadIncoming(),
+                    onRefresh: _refresh,
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                      itemCount: provider.incoming.length,
+                      itemCount:
+                          provider.incoming.length +
+                          (provider.incomingHasMore ? 1 : 0),
                       separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
+                        if (index >= provider.incoming.length) {
+                          _loadMore();
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                          );
+                        }
                         final record = provider.incoming[index];
                         return _IncomingTile(record: record)
                             .animate(delay: (index * 30).ms)
@@ -98,7 +148,9 @@ class _IncomingScreenState extends State<IncomingScreen> {
                   ),
                 );
                 if (context.mounted) {
-                  context.read<TransactionProvider>().loadIncoming();
+                  context.read<TransactionProvider>().loadIncoming(
+                    refresh: true,
+                  );
                   context.read<ItemProvider>().loadItems(refresh: true);
                 }
               },

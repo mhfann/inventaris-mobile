@@ -19,26 +19,53 @@ class SearchField extends StatefulWidget {
 }
 
 class _SearchFieldState extends State<SearchField> {
+  late bool _hasText;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasText = widget.controller.text.isNotEmpty;
+    widget.controller.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+      _hasText = widget.controller.text.isNotEmpty;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    final hasText = widget.controller.text.isNotEmpty;
+    if (hasText == _hasText || !mounted) return;
+    setState(() => _hasText = hasText);
+  }
+
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: widget.controller,
       textInputAction: TextInputAction.search,
-      onChanged: (v) {
-        setState(() {});
-        widget.onChanged?.call(v);
-      },
+      onChanged: (v) => widget.onChanged?.call(v),
       decoration: InputDecoration(
         hintText: widget.hint,
         isDense: true,
         prefixIcon: const Icon(PhosphorIcons.magnifyingGlass, size: 20),
-        suffixIcon: widget.controller.text.isNotEmpty
+        suffixIcon: _hasText
             ? IconButton(
                 tooltip: 'Hapus',
                 icon: const Icon(PhosphorIcons.x, size: 18),
                 onPressed: () {
                   widget.controller.clear();
-                  setState(() {});
                   widget.onChanged?.call('');
                 },
               )

@@ -17,13 +17,22 @@ class MasterFormField {
   final int maxLines;
 }
 
+/// Dipanggil saat tombol simpan ditekan dan validasi lolos.
+/// Kembalikan `null` bila berhasil (sheet ditutup), atau pesan error
+/// (sheet tetap terbuka, isian tidak hilang).
+typedef MasterFormSubmit = Future<String?> Function(Map<String, String> values);
+
 /// Bottom sheet untuk tambah/edit master (kategori/ruangan).
 /// Mengembalikan `Map<String, String>` berisi nilai per id field.
+///
+/// Bila [onSubmit] diisi, data dikirim SEBELUM sheet ditutup; sheet baru
+/// menutup setelah [onSubmit] mengembalikan `null`.
 Future<Map<String, String>?> showMasterFormSheet({
   required BuildContext context,
   required String title,
   required List<MasterFormField> fields,
   required String submitLabel,
+  MasterFormSubmit? onSubmit,
 }) {
   return showModalBottomSheet<Map<String, String>>(
     context: context,
@@ -33,6 +42,7 @@ Future<Map<String, String>?> showMasterFormSheet({
       title: title,
       fields: fields,
       submitLabel: submitLabel,
+      onSubmit: onSubmit,
     ),
   );
 }
@@ -42,11 +52,13 @@ class _MasterFormSheet extends StatefulWidget {
     required this.title,
     required this.fields,
     required this.submitLabel,
+    this.onSubmit,
   });
 
   final String title;
   final List<MasterFormField> fields;
   final String submitLabel;
+  final MasterFormSubmit? onSubmit;
 
   @override
   State<_MasterFormSheet> createState() => _MasterFormSheetState();
@@ -55,6 +67,8 @@ class _MasterFormSheet extends StatefulWidget {
 class _MasterFormSheetState extends State<_MasterFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final Map<String, TextEditingController> _controllers;
+  bool _submitting = false;
+  String? _error;
 
   @override
   void initState() {
@@ -73,10 +87,40 @@ class _MasterFormSheetState extends State<_MasterFormSheet> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop({
+
+    final values = <String, String>{
       for (final f in widget.fields) f.id: _controllers[f.id]!.text.trim(),
+    };
+
+    final onSubmit = widget.onSubmit;
+    if (onSubmit == null) {
+      Navigator.of(context).pop(values);
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    String? error;
+    try {
+      error = await onSubmit(values);
+    } catch (e) {
+      error = e.toString();
+    }
+
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.of(context).pop(values);
+      return;
+    }
+    setState(() {
+      _submitting = false;
+      _error = error;
     });
   }
 
@@ -102,8 +146,10 @@ class _MasterFormSheetState extends State<_MasterFormSheet> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(widget.title,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      child: Text(
+                        widget.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Tutup',
@@ -124,15 +170,24 @@ class _MasterFormSheetState extends State<_MasterFormSheet> {
                     ),
                     validator: i == 0
                         ? (v) => v == null || v.trim().isEmpty
-                            ? '${widget.fields[i].label} wajib diisi'
-                            : null
+                              ? '${widget.fields[i].label} wajib diisi'
+                              : null
                         : null,
                   ),
                   if (i < widget.fields.length - 1) const SizedBox(height: 12),
                 ],
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: _submit,
+                  onPressed: _submitting ? null : _submit,
                   child: Text(widget.submitLabel),
                 ),
               ],

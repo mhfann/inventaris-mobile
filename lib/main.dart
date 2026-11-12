@@ -23,8 +23,12 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   ApiClient.instance.onMaintenance = () {
     if (_maintenanceScreenShowing) return;
+    final navigator = appNavigatorKey.currentState;
+    // Navigator belum siap: jangan nyalakan penanda, supaya 503 berikutnya
+    // masih bisa menampilkan layar maintenance.
+    if (navigator == null) return;
     _maintenanceScreenShowing = true;
-    appNavigatorKey.currentState?.pushAndRemoveUntil(
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) => MaintenanceScreen(
           onResolved: () => _maintenanceScreenShowing = false,
@@ -46,7 +50,11 @@ class InventarisApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => AuthProvider(
             onSessionExpired: () {
-              appNavigatorKey.currentState?.pushAndRemoveUntil(
+              final navigator = appNavigatorKey.currentState;
+              if (navigator == null) return;
+              // Layar maintenance (bila ada) ikut terbuang oleh navigasi ini.
+              _maintenanceScreenShowing = false;
+              navigator.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,
               );
@@ -95,9 +103,21 @@ class _AppBootstrapState extends State<AppBootstrap> {
         // Handler onMaintenance sudah menampilkan layar maintenance.
         return;
       }
+    } catch (_) {
+      // Gagal mengambil status (jaringan, format, dll.) tidak boleh
+      // menghentikan aplikasi: lanjut ke pemulihan sesi.
     }
-    final loggedIn = await auth.restoreSession();
-    if (!mounted) return;
+    // Layar maintenance sudah mengambil alih navigasi.
+    if (!mounted || _maintenanceScreenShowing) return;
+
+    bool loggedIn;
+    try {
+      loggedIn = await auth.restoreSession();
+    } catch (_) {
+      // Sesi tersimpan tidak bisa dibaca: anggap belum login.
+      loggedIn = false;
+    }
+    if (!mounted || _maintenanceScreenShowing) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) =>
@@ -107,11 +127,17 @@ class _AppBootstrapState extends State<AppBootstrap> {
   }
 
   void _applyStatus(Object? data) {
-    if (data is! Map<String, dynamic>) return;
+    if (data is! Map) return;
     final payload = data['data'];
-    if (payload is! Map<String, dynamic>) return;
-    final threshold = payload['low_stock_threshold'];
-    if (threshold is int) {
+    if (payload is! Map) return;
+    final raw = payload['low_stock_threshold'];
+    final int? threshold = switch (raw) {
+      int v => v,
+      num v => v.toInt(),
+      String v => int.tryParse(v.trim()),
+      _ => null,
+    };
+    if (threshold != null && threshold >= 0) {
       AppConfig.lowStockThreshold = threshold;
     }
   }

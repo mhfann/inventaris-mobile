@@ -9,6 +9,15 @@ import '../models/item.dart';
 import '../models/transaction_filter.dart';
 import 'search_select_field.dart';
 
+final _displayDateFormat = DateFormat('dd/MM/yyyy');
+
+/// Ubah tanggal 'yyyy-MM-dd' ke 'dd/MM/yyyy'. Bila formatnya tidak dikenali,
+/// tampilkan apa adanya daripada melempar error saat build.
+String _displayDate(String raw) {
+  final parsed = DateTime.tryParse(raw);
+  return parsed == null ? raw : _displayDateFormat.format(parsed);
+}
+
 class TransactionFilterBar extends StatefulWidget {
   const TransactionFilterBar({
     super.key,
@@ -33,8 +42,6 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
   List<Item> _items = [];
   Future<void>? _itemsLoad;
   bool _sheetOpen = false;
-
-  static final _dateFormat = DateFormat('dd/MM/yyyy');
 
   @override
   void initState() {
@@ -76,13 +83,57 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
     super.dispose();
   }
 
+  /// Bangun filter baru secara eksplisit (tanpa copyWith) supaya nilai yang
+  /// dikosongkan benar-benar menjadi null.
+  TransactionFilter _filterWith({
+    required String? search,
+    required String? from,
+    required String? to,
+    required int? itemId,
+  }) {
+    return TransactionFilter(
+      search: search,
+      from: from,
+      to: to,
+      itemId: itemId,
+    );
+  }
+
   void _applySearch(String value) {
     final text = value.trim();
     _pendingSearch = text;
+    final filter = widget.filter;
     widget.onChanged(
-      text.isEmpty
-          ? widget.filter.copyWith(clearSearch: true)
-          : widget.filter.copyWith(search: text),
+      _filterWith(
+        search: text.isEmpty ? null : text,
+        from: filter.from,
+        to: filter.to,
+        itemId: filter.itemId,
+      ),
+    );
+  }
+
+  void _clearDates() {
+    final filter = widget.filter;
+    widget.onChanged(
+      _filterWith(
+        search: filter.search,
+        from: null,
+        to: null,
+        itemId: filter.itemId,
+      ),
+    );
+  }
+
+  void _clearItem() {
+    final filter = widget.filter;
+    widget.onChanged(
+      _filterWith(
+        search: filter.search,
+        from: filter.from,
+        to: filter.to,
+        itemId: null,
+      ),
     );
   }
 
@@ -98,12 +149,21 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
         unawaited(_loadItems());
       }
       if (!mounted) return;
+      // Pakai teks yang sedang terlihat di kolom pencarian, termasuk yang
+      // belum diterapkan dengan Enter.
+      final pending = _pendingSearch.trim();
+      final current = widget.filter;
+      final initial = _filterWith(
+        search: pending.isEmpty ? null : pending,
+        from: current.from,
+        to: current.to,
+        itemId: current.itemId,
+      );
       final result = await showModalBottomSheet<TransactionFilter>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (context) =>
-            _FilterSheet(filter: widget.filter, items: _items),
+        builder: (context) => _FilterSheet(filter: initial, items: _items),
       );
       if (result != null && mounted) widget.onChanged(result);
     } finally {
@@ -120,25 +180,17 @@ class _TransactionFilterBarState extends State<TransactionFilterBar> {
     final chips = <Widget>[];
 
     if (filter.from != null || filter.to != null) {
-      final from = filter.from != null
-          ? _dateFormat.format(DateTime.parse(filter.from!))
-          : '...';
-      final to = filter.to != null
-          ? _dateFormat.format(DateTime.parse(filter.to!))
-          : '...';
-      chips.add(
-        _FilterChip(
-          label: '$from – $to',
-          onDelete: () =>
-              widget.onChanged(filter.copyWith(clearFrom: true, clearTo: true)),
-        ),
-      );
+      final from = filter.from != null ? _displayDate(filter.from!) : '...';
+      final to = filter.to != null ? _displayDate(filter.to!) : '...';
+      chips.add(_FilterChip(label: '$from – $to', onDelete: _clearDates));
     }
-    if (selectedItem != null) {
+    if (filter.itemId != null) {
+      // Chip tetap muncul walau barangnya tidak ada di daftar yang termuat,
+      // supaya filter barang selalu bisa dihapus.
       chips.add(
         _FilterChip(
-          label: selectedItem.name,
-          onDelete: () => widget.onChanged(filter.copyWith(clearItemId: true)),
+          label: selectedItem?.name ?? 'Barang terpilih',
+          onDelete: _clearItem,
         ),
       );
     }
@@ -311,16 +363,19 @@ class _FilterSheetState extends State<_FilterSheet> {
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
-    final initial =
+    final now = DateTime.now();
+    var initial =
         DateTime.tryParse(isFrom ? _from ?? _to ?? '' : _to ?? _from ?? '') ??
-        DateTime.now();
+        now;
+    // showDatePicker melempar assertion bila initialDate di luar rentang.
+    if (initial.isAfter(now)) initial = now;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
+      lastDate: now,
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       final value =
           '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       setState(() {
@@ -333,16 +388,26 @@ class _FilterSheetState extends State<_FilterSheet> {
     }
   }
 
-  TransactionFilter _build() => TransactionFilter(
-    search: _search?.trim().isEmpty ?? true ? null : _search!.trim(),
-    from: _from,
-    to: _to,
-    itemId: _itemId,
-  );
+  TransactionFilter _build() {
+    var from = _from;
+    var to = _to;
+    // Format 'yyyy-MM-dd' bisa dibandingkan sebagai teks. Tukar bila terbalik.
+    if (from != null && to != null && from.compareTo(to) > 0) {
+      final tmp = from;
+      from = to;
+      to = tmp;
+    }
+    final search = _search?.trim() ?? '';
+    return TransactionFilter(
+      search: search.isEmpty ? null : search,
+      from: from,
+      to: to,
+      itemId: _itemId,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final format = DateFormat('dd/MM/yyyy');
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -402,9 +467,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   Expanded(
                     child: _DateField(
                       label: 'Dari',
-                      value: _from != null
-                          ? format.format(DateTime.parse(_from!))
-                          : null,
+                      value: _from != null ? _displayDate(_from!) : null,
                       onTap: () => _pickDate(isFrom: true),
                     ),
                   ),
@@ -412,9 +475,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   Expanded(
                     child: _DateField(
                       label: 'Sampai',
-                      value: _to != null
-                          ? format.format(DateTime.parse(_to!))
-                          : null,
+                      value: _to != null ? _displayDate(_to!) : null,
                       onTap: () => _pickDate(isFrom: false),
                     ),
                   ),
@@ -450,6 +511,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: () {
+                  _searchController.clear();
                   setState(() {
                     _search = null;
                     _from = null;

@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/custom_snackbar.dart';
 import '../../models/report.dart';
 import '../../services/report_service.dart';
 import '../../widgets/error_view.dart';
@@ -57,16 +58,20 @@ class _ReportScreenState extends State<ReportScreen> {
   ReportData? _data;
   bool _loading = false;
   String? _error;
+  int _requestId = 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   String get _monthLabel => '${_months[_month.month - 1]} ${_month.year}';
 
   Future<void> _load() async {
+    final requestId = ++_requestId;
     setState(() {
       _loading = true;
       _error = null;
@@ -81,11 +86,20 @@ class _ReportScreenState extends State<ReportScreen> {
         from: _from,
         to: _to,
       );
-      if (mounted) setState(() => _data = data);
+      if (!mounted || requestId != _requestId) return;
+      setState(() => _data = data);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (!mounted || requestId != _requestId) return;
+      final message = e.toString();
+      setState(() => _error = message);
+      // Jika data lama masih tampil, ErrorView tidak muncul -> beri tahu lewat snackbar.
+      if (_data != null) {
+        showAppSnackBar(context, message, type: AppSnackType.error);
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && requestId == _requestId) {
+        setState(() => _loading = false);
+      }
     }
   }
 

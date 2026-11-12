@@ -1,8 +1,9 @@
 import '../core/api/api_client.dart';
-import '../../models/report.dart';
+import '../models/report.dart';
 
 class ReportService {
-  ReportService({ApiClient? apiClient}) : _api = apiClient ?? ApiClient.instance;
+  ReportService({ApiClient? apiClient})
+    : _api = apiClient ?? ApiClient.instance;
 
   final ApiClient _api;
 
@@ -16,10 +17,7 @@ class ReportService {
     DateTime? from,
     DateTime? to,
   }) async {
-    final params = <String, dynamic>{
-      'type': type,
-      'period': period,
-    };
+    final params = <String, dynamic>{'type': type, 'period': period};
 
     switch (period) {
       case 'monthly':
@@ -27,8 +25,15 @@ class ReportService {
       case 'yearly':
         params['year'] = year ?? DateTime.now().year;
       case 'range':
-        params['from'] = _dateKey(from ?? DateTime.now());
-        params['to'] = _dateKey(to ?? DateTime.now());
+        var start = from ?? DateTime.now();
+        var end = to ?? DateTime.now();
+        if (start.isAfter(end)) {
+          final tmp = start;
+          start = end;
+          end = tmp;
+        }
+        params['from'] = _dateKey(start);
+        params['to'] = _dateKey(end);
       default:
         params['date'] = _dateKey(date ?? DateTime.now());
     }

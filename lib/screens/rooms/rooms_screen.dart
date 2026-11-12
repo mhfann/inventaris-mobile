@@ -28,7 +28,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ItemProvider>().loadReferences();
+      if (!mounted) return;
+      final provider = context.read<ItemProvider>();
+      if (!provider.referencesLoading) provider.loadReferences();
     });
   }
 
@@ -36,6 +38,15 @@ class _RoomsScreenState extends State<RoomsScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final provider = context.read<ItemProvider>();
+    await provider.loadReferences();
+    if (!mounted) return;
+    if (provider.referencesError != null && provider.rooms.isNotEmpty) {
+      _showSnack(provider.referencesError!, isError: true);
+    }
   }
 
   Future<void> _openForm({Room? room}) async {
@@ -67,12 +78,13 @@ class _RoomsScreenState extends State<RoomsScreen> {
     if (result == null || !mounted) return;
 
     final provider = context.read<ItemProvider>();
+    final name = (result['name'] ?? '').trim();
+    final location = (result['location'] ?? '').trim();
+    final pic = (result['pic'] ?? '').trim();
     final payload = {
-      'name': result['name'],
-      'location': result['location']?.isEmpty ?? true
-          ? null
-          : result['location'],
-      'pic': result['pic']?.isEmpty ?? true ? null : result['pic'],
+      'name': name,
+      'location': location.isEmpty ? null : location,
+      'pic': pic.isEmpty ? null : pic,
     };
     try {
       if (room == null) {
@@ -137,11 +149,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
     final canDelete = auth.can('rooms.delete');
 
     Widget body;
-    if (provider.loading && provider.rooms.isEmpty) {
+    if (provider.referencesLoading && provider.rooms.isEmpty) {
       body = const LoadingWidget(text: 'Memuat ruangan...');
-    } else if (provider.error != null && provider.rooms.isEmpty) {
+    } else if (provider.referencesError != null && provider.rooms.isEmpty) {
       body = ErrorView(
-        message: provider.error!,
+        message: provider.referencesError!,
         onRetry: () => provider.loadReferences(),
       );
     } else {
@@ -173,7 +185,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     ),
                   )
                 : RefreshIndicator(
-                    onRefresh: () => provider.loadReferences(),
+                    onRefresh: _refresh,
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                       itemCount: rooms.length,

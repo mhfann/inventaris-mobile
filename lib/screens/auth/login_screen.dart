@@ -134,10 +134,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               prefixIcon: Icon(PhosphorIcons.envelope),
                             ),
                             validator: (v) {
-                              if (v == null || v.trim().isEmpty)
+                              if (v == null || v.trim().isEmpty) {
                                 return 'Email wajib diisi';
-                              if (!v.trim().contains('@'))
+                              }
+                              if (!v.trim().contains('@')) {
                                 return 'Format email tidak valid';
+                              }
                               return null;
                             },
                           )
@@ -171,8 +173,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             validator: (v) {
-                              if (v == null || v.isEmpty)
+                              if (v == null || v.isEmpty) {
                                 return 'Password wajib diisi';
+                              }
                               return null;
                             },
                             onFieldSubmitted: (_) => _submit(),

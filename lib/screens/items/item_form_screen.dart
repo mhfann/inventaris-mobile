@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,7 @@ class ItemFormScreen extends StatefulWidget {
 
 class _ItemFormScreenState extends State<ItemFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
 
   late final TextEditingController _nameController;
   late final TextEditingController _brandController;
@@ -53,10 +55,21 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     _categoryId = item?.categoryId;
     _roomId = item?.roomId;
     _condition = item?.condition ?? 'Baik';
+
+    // Pastikan daftar kategori & ruangan tersedia untuk dropdown.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = context.read<ItemProvider>();
+      if ((provider.categories.isEmpty || provider.rooms.isEmpty) &&
+          !provider.referencesLoading) {
+        provider.loadReferences();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameController.dispose();
     _brandController.dispose();
     _unitController.dispose();
@@ -78,13 +91,23 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
         ? null
         : _yearController.text.trim(),
     'condition': _condition,
-    'stock': int.tryParse(_stockController.text) ?? 0,
+    'stock': int.tryParse(_stockController.text.trim()) ?? 0,
     'description': _descriptionController.text.trim().isEmpty
         ? null
         : _descriptionController.text.trim(),
   };
 
+  void _scrollToTop() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
   Future<void> _submit() async {
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -102,7 +125,10 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) setState(() => _serverError = e.toString());
+      if (mounted) {
+        setState(() => _serverError = e.toString());
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTop());
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -141,6 +167,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     TextInputType? keyboardType,
     String? hint,
     int? maxLines,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -151,6 +178,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
+          inputFormatters: inputFormatters,
           decoration: InputDecoration(hintText: hint),
           validator: validator,
         ),
@@ -162,10 +190,22 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ItemProvider>();
 
+    // Nilai awal dropdown harus ada di daftar item, kalau tidak -> assertion.
+    final categoryValue = provider.categories.any((c) => c.id == _categoryId)
+        ? _categoryId
+        : null;
+    final roomValue = provider.rooms.any((r) => r.id == _roomId)
+        ? _roomId
+        : null;
+    final conditionOptions = _conditions.contains(_condition)
+        ? _conditions
+        : [..._conditions, _condition];
+
     return Scaffold(
       appBar: AppBar(title: Text(_isEdit ? 'Edit Barang' : 'Tambah Barang')),
       body:
           SingleChildScrollView(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 child: Form(
                   key: _formKey,
@@ -217,8 +257,11 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                               children: [
                                 _buildFieldLabel('Kategori'),
                                 DropdownButtonFormField<int>(
+                                  key: ValueKey(
+                                    'kategori-${provider.categories.length}',
+                                  ),
                                   isExpanded: true,
-                                  initialValue: _categoryId,
+                                  initialValue: categoryValue,
                                   hint: const Text('-- Pilih Kategori --'),
                                   items: provider.categories
                                       .map(
@@ -241,8 +284,11 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                               children: [
                                 _buildFieldLabel('Ruangan'),
                                 DropdownButtonFormField<int>(
+                                  key: ValueKey(
+                                    'ruangan-${provider.rooms.length}',
+                                  ),
                                   isExpanded: true,
-                                  initialValue: _roomId,
+                                  initialValue: roomValue,
                                   hint: const Text('-- Pilih Ruangan --'),
                                   items: provider.rooms
                                       .map(
@@ -252,8 +298,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                                         ),
                                       )
                                       .toList(),
-                                  onChanged: (v) =>
-                                      setState(() => _roomId = v),
+                                  onChanged: (v) => setState(() => _roomId = v),
                                 ),
                               ],
                             ),
@@ -265,7 +310,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                       DropdownButtonFormField<String>(
                         isExpanded: true,
                         initialValue: _condition,
-                        items: _conditions
+                        items: conditionOptions
                             .map(
                               (c) => DropdownMenuItem(value: c, child: Text(c)),
                             )
@@ -303,6 +348,10 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                               controller: _yearController,
                               keyboardType: TextInputType.number,
                               hint: 'YYYY',
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(4),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -311,8 +360,11 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                               label: 'Stok',
                               controller: _stockController,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               validator: (v) {
-                                final n = int.tryParse(v ?? '');
+                                final n = int.tryParse((v ?? '').trim());
                                 if (n == null || n < 0) {
                                   return 'Stok tidak valid';
                                 }

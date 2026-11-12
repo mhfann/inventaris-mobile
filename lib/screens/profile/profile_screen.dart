@@ -10,8 +10,15 @@ import '../reports/report_screen.dart';
 import '../users/user_management_screen.dart';
 import 'change_password_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _loggingOut = false;
 
   String _initials(String name) {
     final parts = name
@@ -24,7 +31,9 @@ class ProfileScreen extends StatelessWidget {
     return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
-  Future<void> _logout(BuildContext context) async {
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -43,11 +52,16 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
-    if (ok != true || !context.mounted) return;
+    if (ok != true || !mounted || _loggingOut) return;
 
+    _loggingOut = true;
     final auth = context.read<AuthProvider>();
-    await auth.logout();
-    if (!context.mounted) return;
+    try {
+      await auth.logout();
+    } catch (_) {
+      // Tetap lanjut ke layar login meskipun server gagal dihubungi.
+    }
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
@@ -147,7 +161,7 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             OutlinedButton.icon(
-              onPressed: () => _logout(context),
+              onPressed: _logout,
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
                 foregroundColor: context.danger,

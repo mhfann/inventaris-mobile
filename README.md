@@ -4,7 +4,7 @@ Aplikasi inventaris sekolah berbasis Flutter, backend Laravel (https://inventari
 Lokasi project: C:\flutter\inventaris-mobile. Saya menjalankannya di Windows desktop saat development.
 State management: provider. HTTP: dio. Ikon: phosphoricons_flutter. Font: google_fonts (Plus Jakarta Sans).
 Shorebird terpasang (App ID 7c03f4fb-7d03-4090-b54c-9bfbb5b6f4e7), rilis terakhir 1.0.0+2.
-Saya lampirkan zip project terbaru. Baca dulu sebelum menjawab.
+Saya lampirkan zip project terbaru. Cek dulu apakah zip benar-benar ada di unggahan; kalau tidak ada, katakan dan minta saya mengirim file satu per satu.
 
 ATURAN KERJA
 - Jawab dalam bahasa Indonesia, singkat, langsung bisa dipakai.
@@ -12,7 +12,7 @@ ATURAN KERJA
 - Saya mengirim file satu per satu untuk dicek. Untuk tiap file: sebut ada bug atau tidak, jelaskan singkat, dan kalau ada perbaikan, berikan ISI FILE LENGKAP (bukan potongan) supaya saya tinggal menimpa.
 - Kalau perbaikan menyentuh lebih dari satu file, sebutkan semua file yang harus dipasang bersamaan.
 - Kalau ada error, minta saya mengirim output lengkapnya.
-- Katakan terus terang kalau sesuatu belum diuji atau penyebabnya belum pasti.
+- Katakan terus terang kalau sesuatu belum diuji atau penyebabnya belum pasti. Jangan menebak nama endpoint, getter, atau format respons; minta file/contohnya.
 
 GAYA VISUAL (acuan, jangan diubah)
 - Tema terang, kartu putih berborder tipis, sudut membulat besar.
@@ -21,68 +21,73 @@ GAYA VISUAL (acuan, jangan diubah)
 - Navigasi bawah: Dashboard, Barang, Master (hanya admin), Transaksi, Profil.
 
 STATUS IKON APLIKASI
-- flutter_launcher_icons sudah di dev_dependencies; ikon Android (termasuk adaptive, latar #E8E9F8) dan iOS sudah ter-generate dengan benar.
-- Ikon Windows BELUM di-generate (blok `windows:` di pubspec masih belum diaktifkan).
+- Ikon Android (termasuk adaptive, latar #E8E9F8) dan iOS sudah ter-generate. Ikon Windows BELUM (blok `windows:` di pubspec belum diaktifkan).
 - Hasil generate ikon belum di-commit.
 - Belum dilakukan: naikkan versi ke 1.0.0+3 lalu `shorebird release android` (ikon = perubahan native, tidak bisa lewat `shorebird patch`).
 
-CATATAN PENTING: agent sebelumnya tidak bisa menjalankan Flutter, jadi SEMUA perbaikan di bawah berasal dari pembacaan kode dan BELUM DIUJI. Cek di zip apakah tiap perubahan sudah terpasang.
+CATATAN PENTING
+Agent sebelumnya tidak bisa menjalankan Flutter, jadi SEMUA perbaikan di bawah berasal dari pembacaan kode dan BELUM DIUJI. Cek di zip apakah tiap perubahan sudah terpasang; kalau saya bilang belum, anggap belum.
 
-FILE YANG SUDAH DIPERBAIKI DAN DIKIRIM (isi lengkap)
-1. lib/providers/item_provider.dart
-   - Flag muat dashboard dipisah (`dashboardLoading`) supaya tidak menghalangi `loadItems()` (dulu tab Barang kosong saat pertama dibuka).
-   - `loadItems()` memakai nomor permintaan (`_itemsRequest`): refresh/pencarian selalu jalan, hasil lama dibuang.
-   - Gagal memuat halaman berikutnya -> `_hasMore = false` (mencegah percobaan ulang tanpa henti).
-   - `loadDashboard()` tidak lagi menulis ke `_error`.
-   - `loadReferences()` punya `referencesLoading` dan `referencesError` sendiri.
-2. lib/screens/home/dashboard_screen.dart
-   - Indeks tab dijaga agar tidak melewati jumlah tab (dulu RangeError saat admin logout).
-   - Tombol "Coba lagi" dan tarik-untuk-refresh lewat `_loadDashboard()`; gagal refresh saat data ada -> snackbar.
-   - Dashboard dimuat ulang saat tab Dashboard diketuk.
-3. lib/widgets/transaction_filter_bar.dart
-   - Form filter tidak bisa terbuka dobel; terbuka langsung jika daftar barang sudah ada.
-   - Seluruh chip filter bisa diketuk untuk menghapus (bukan hanya ikon X).
-   - BELUM TUNTAS: saya melaporkan chip tanggal "dari–sampai" tidak bisa ditutup. Penyebab pastinya belum ditemukan (logika X terbaca benar). Saya belum mengonfirmasi apakah perubahan ini menyelesaikannya.
-4. lib/core/api/api_client.dart: try/catch saat baca token di interceptor, pesan ramah untuk status >= 500 (selain 503), `sendTimeout` ditangani, `message` dibaca dengan `?.toString()`.
-5. lib/core/widgets/custom_snackbar.dart: pesan maksimal 3 baris, error tampil 5 detik, `duration` jadi opsional.
-6. lib/models/report.dart: helper `_toInt` untuk `totals`, `stock`, `quantity`.
-7. lib/providers/transaction_provider.dart: status muat/error/hasMore terpisah untuk masuk dan keluar, nomor permintaan, dukungan halaman berikutnya (`loadIncoming(refresh: false)`), error simpan tidak bocor ke daftar. Getter lama `loading`/`error` dipertahankan.
-8. lib/screens/auth/login_screen.dart: cegah login ganda, Enter pindah kolom, autofill, tooltip tombol mata.
-9. lib/screens/categories/categories_screen.dart: memakai `referencesLoading`/`referencesError` (harus bersama item_provider.dart di atas).
-10. lib/screens/errors/maintenance_screen.dart: `restoreSession()` dipanggil sebelum ke Dashboard; cegah navigasi ganda ke login.
+FILE YANG SUDAH DIPERBAIKI (isi lengkap sudah dikirim)
+Sesi 1:
+1. providers/item_provider.dart (dashboardLoading terpisah, nomor permintaan loadItems, referencesLoading/referencesError, loadDashboard tidak menulis _error)
+2. screens/home/dashboard_screen.dart
+3. widgets/transaction_filter_bar.dart (BELUM TUNTAS: chip tanggal "dari–sampai" dilaporkan tidak bisa ditutup, penyebab belum ditemukan)
+4. core/api/api_client.dart
+5. core/widgets/custom_snackbar.dart
+6. models/report.dart
+7. providers/transaction_provider.dart (status muat/error/hasMore terpisah masuk & keluar, loadIncoming/loadOutgoing(refresh: ...), getter lama loading/error dipertahankan)
+8. screens/auth/login_screen.dart
+9. screens/categories/categories_screen.dart (butuh item_provider.dart baru)
+10. screens/errors/maintenance_screen.dart
 
-SARAN YANG DIBERIKAN SEBAGAI KODE DI CHAT, BELUM TENTU SAYA PASANG (opsional)
-- api_exception.dart: `toString()` menampilkan semua pesan validasi.
-- app_config.dart: `AppConfig.applyStatus()` untuk membaca `low_stock_threshold` (termasuk string angka), dipakai di main.dart dan maintenance_screen.dart.
-- app_constants.dart: `baseUrl` disederhanakan (String.fromEnvironment), hapus cabang platform yang identik.
-- token_storage.dart: pembacaan aman (`_safeRead`) agar startup tidak macet jika secure storage rusak.
-- models/dashboard.dart: helper `_toInt`/`_toIntList`.
-- models/room.dart: `==` dan `hashCode` berdasarkan id (mencegah error dropdown "Tujuan" di form barang keluar).
-- models/transaction_filter.dart: `activeCount` menghitung rentang tanggal sebagai satu.
-- providers/auth_provider.dart: di `logout()`, set status unauthenticated sebelum memanggil server.
-- screens/items/item_detail_screen.dart: helper `_orDash` untuk nilai kosong.
+Sesi 2 (ISI LENGKAP SUDAH DIKIRIM, belum tentu saya pasang):
+11. screens/items/item_form_screen.dart: nilai awal dropdown dijaga (cegah assertion), loadReferences bila kosong, key dropdown, scroll ke error, input angka saja.
+12. screens/items/items_screen.dart: loadItems tidak lagi dipanggil di dalam itemBuilder (postFrame + penjaga), hasSearch benar, reset juga mematikan filter stok menipis, onEdit hanya jika canEdit.
+13. screens/profile/profile_screen.dart: jadi StatefulWidget, penjaga logout ganda, error logout ditangkap.
+14. screens/profile/change_password_screen.dart: validasi huruf besar/kecil/angka sesuai teks bantuan, validator konfirmasi sendiri, snackbar sebelum pop.
+15. screens/reports/report_screen.dart: nomor permintaan, snackbar bila refresh gagal saat data ada, penjaga mounted.
+16. screens/rooms/rooms_screen.dart: pakai referencesLoading/referencesError, trim payload (butuh item_provider.dart baru).
+17. screens/transactions/incoming_screen.dart dan outgoing_screen.dart: pakai getter per daftar (incomingLoading/incomingError/incomingHasMore, outgoing*), muat halaman berikutnya, refresh: true (butuh transaction_provider.dart baru).
+18. screens/transactions/transaction_form_screen.dart: "Stok saat ini" tanpa "null", tujuan disimpan sebagai id ruangan (bukan objek Room), loadReferences terpisah dari fetchAllItems, scroll ke error.
+19. screens/users/user_management_screen.dart: error simpan tampil di dalam bottom sheet, tidak bisa hapus akun sendiri, validasi password saat edit, regex email, snackbar bila refresh gagal.
+20. services/auth_service.dart: import diperbaiki, login menolak respons tanpa token/user, logout tidak melempar error setelah sesi lokal dibersihkan.
+21. services/item_service.dart: import diperbaiki, hasMore membaca meta atau level atas (fallback jumlah item == perPage), parameter kosong tidak dikirim, unwrap aman.
+22. services/category_service.dart: import diperbaiki, tipe Response dari dio, unwrap aman.
 
-BUG/PEKERJAAN YANG MASIH TERBUKA
-- items_screen.dart: `provider.loadItems()` dipanggil di dalam `itemBuilder` (memicu notifyListeners saat build) -> bungkus dengan `WidgetsBinding.instance.addPostFrameCallback`. Juga: `hasSearch` di empty state diisi `provider.error == null` (selalu "Barang tidak ditemukan"); teks kotak pencarian tidak sinkron dengan `setLowStockOnly()` dan setelah logout.
-- incoming_screen.dart dan outgoing_screen.dart: belum memakai getter per daftar (`incomingLoading`, `incomingError`, `incomingHasMore`, dst.) dan belum memuat halaman berikutnya, jadi daftar masih berhenti di 15 data.
-- rooms_screen.dart: masih memakai `provider.loading`/`provider.error`; ganti ke `referencesLoading`/`referencesError` seperti categories_screen.dart.
-- transaction_form_screen.dart: teks "Stok saat ini: 5 null" bila satuan kosong (baris ~293, tambahkan `?? ''`).
-- master_form_sheet.dart: form ditutup sebelum data dikirim, isian hilang kalau server menolak.
-- Izin/peran user tidak pernah diambil ulang setelah login (restoreSession hanya membaca salinan tersimpan).
-- Data provider (barang, transaksi, user, filter) tidak dikosongkan saat logout.
-- lib/services/*.dart: import ditulis `'../../models/...'`, seharusnya `'../models/...'`.
-- Rilis Android: `android/app/build.gradle.kts` masih menandatangani release dengan debug key; `android:usesCleartextTraffic="true"` di AndroidManifest tidak diperlukan.
-- Font Plus Jakarta Sans diunduh saat runtime (belum dibundel sebagai aset); `MaterialApp` tanpa `themeMode` sehingga ikut mode gelap perangkat.
-- Hal kecil menyangkut teks/tampilan, menunggu keputusan saya: ikon mata password terbalik antara login dan ganti password; ejaan "Silahkan" di layar maintenance; "Inventaris Sekolah v1.0" ditulis manual di profil; kontras teks putih di atas oranye/hijau.
+Dicek, TIDAK ADA bug: screens/master/master_screen.dart, screens/transactions/transactions_screen.dart.
+
+PASANGAN YANG HARUS DIPASANG BERSAMA
+- item_provider.dart (baru) + categories_screen + rooms_screen + item_form_screen
+- transaction_provider.dart (baru) + incoming_screen + outgoing_screen
+- profile_screen disarankan bersama perubahan auth_provider.logout() (saran, lihat bawah)
+
+SARAN OPSIONAL SEBELUMNYA (kode sudah diberikan di chat, belum tentu saya pasang)
+api_exception.dart (toString semua pesan validasi); app_config.dart (applyStatus, low_stock_threshold); app_constants.dart (baseUrl String.fromEnvironment); token_storage.dart (_safeRead); models/dashboard.dart (_toInt/_toIntList); models/room.dart (== dan hashCode berdasarkan id); models/transaction_filter.dart (activeCount rentang tanggal = 1); providers/auth_provider.dart (logout set unauthenticated dulu); screens/items/item_detail_screen.dart (_orDash).
 
 PROGRES PENGECEKAN FILE SATU PER SATU
-Sudah dicek: semua di lib/core, semua di lib/models, semua di lib/providers, lalu screens: auth/login_screen, categories/categories_screen, errors/maintenance_screen, home/dashboard_screen, items/item_detail_screen; widget: transaction_filter_bar.
-Belum dicek satu per satu: screens/items/item_form_screen, screens/items/items_screen, screens/master/master_screen, screens/profile/profile_screen, screens/profile/change_password_screen, screens/reports/report_screen, screens/rooms/rooms_screen, screens/transactions/(incoming_screen, outgoing_screen, transaction_form_screen, transactions_screen), screens/users/user_management_screen, semua lib/services, widget lainnya (error_view, icon_badge, loading_widget, master_form_sheet, search_field, search_select_field, section_header, stat_card), lib/main.dart, dan folder test.
+Sudah dicek: semua lib/core, semua lib/models, semua lib/providers, semua lib/screens, widgets/transaction_filter_bar, dan services: auth_service, item_service, category_service.
+BELUM dicek: sisa lib/services (room_service dan lainnya; minta saya menyebut daftar file di folder itu), widget: error_view, icon_badge, loading_widget, master_form_sheet, search_field, search_select_field, section_header, stat_card; lib/main.dart; folder test.
+Aturan untuk semua file di lib/services: import ditulis '../../models/...', harus '../models/...'.
+
+BUG/PEKERJAAN YANG MASIH TERBUKA
+- master_form_sheet.dart: form ditutup sebelum data dikirim, isian hilang kalau server menolak (perbaiki saat file ini dicek).
+- search_select_field.dart: pastikan `value` yang tidak ada di `items` ditangani aman (dipakai di form barang keluar).
+- Izin/peran user tidak diambil ulang setelah login (restoreSession hanya membaca salinan tersimpan). Butuh nama endpoint profil (/user atau /me) dan bentuk responsnya: minta saya menjalankan `php artisan route:list` bagian auth/user, jangan menebak.
+- Data provider (barang, transaksi, user, filter) tidak dikosongkan saat logout.
+- items_screen: teks kotak pencarian tidak sinkron dengan setLowStockOnly() dan setelah logout (butuh item_provider.dart terpasang). canEdit = update || create terlihat janggal, tanya saya dulu.
+- report_service: cek parameter fetch(...) dan format tanggal yang dikirim.
+- category_service.all() hanya satu halaman; kalau backend memaginasi /categories, kategori ke-16 dan seterusnya tidak muncul. Minta contoh respons GET /categories.
+- item_service: low_stock dikirim sebagai true; kalau tidak jalan di Laravel, ganti 1.
+- Pastikan createRoom/updateRoom/deleteRoom/createUser/updateUser memperbarui daftar di provider, dan UserProvider.roles terisi oleh loadUsers (belum terlihat). Tipe User.id harus sama dengan auth.user.id (dipakai penjaga hapus diri sendiri).
+- Admin bisa mencabut peran admin dari dirinya sendiri lewat edit user (belum diputuskan).
+- Rilis Android: android/app/build.gradle.kts masih menandatangani release dengan debug key; android:usesCleartextTraffic="true" di AndroidManifest tidak diperlukan.
+- Font Plus Jakarta Sans diunduh saat runtime (belum dibundel sebagai aset); MaterialApp tanpa themeMode sehingga ikut mode gelap perangkat.
+- Menunggu keputusan saya: ikon mata password terbalik antara login dan ganti password; ejaan "Silahkan" di layar maintenance; "Inventaris Sekolah v1.0" ditulis manual di profil; email tampil dobel di profil; kontras teks putih di atas oranye/hijau.
 
 LANGKAH SELANJUTNYA
-1. Lanjutkan pengecekan dari screens/items/item_form_screen.dart, lalu items_screen.dart, dan seterusnya sesuai daftar "belum dicek".
-2. Setelah semua beres: `flutter analyze` dan `flutter test`, perbaiki yang muncul.
+1. Saya menempelkan file dari lib/services satu per satu (berikutnya room_service.dart), lalu widget, lalu lib/main.dart dan test.
+2. Setelah semua beres: `flutter analyze` dan `flutter test`, perbaiki yang muncul (kirim output lengkapnya).
 3. Naikkan versi ke 1.0.0+3, lalu `shorebird release android`.
 
-
-saya sampai di item_detail_screen.dart
+Saya sampai di: services/category_service.dart (sudah dicek). Berikutnya: room_service.dart.

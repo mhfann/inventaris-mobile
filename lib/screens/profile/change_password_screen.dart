@@ -39,6 +39,21 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (value.length < 8) {
       return 'Minimal 8 karakter';
     }
+    if (!RegExp(r'[A-Z]').hasMatch(value) ||
+        !RegExp(r'[a-z]').hasMatch(value) ||
+        !RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Harus mengandung huruf besar, huruf kecil, dan angka';
+    }
+    return null;
+  }
+
+  String? _validateConfirm(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Konfirmasi password wajib diisi';
+    }
+    if (value != _newController.text) {
+      return 'Konfirmasi password tidak cocok';
+    }
     return null;
   }
 
@@ -88,15 +103,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Future<void> _submit() async {
+    if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
-    if (_newController.text != _confirmController.text) {
-      showAppSnackBar(
-        context,
-        'Konfirmasi password tidak cocok',
-        type: AppSnackType.error,
-      );
-      return;
-    }
 
     setState(() => _loading = true);
     try {
@@ -105,12 +113,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         newPassword: _newController.text,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
       showAppSnackBar(
         context,
         'Password berhasil diubah',
         type: AppSnackType.success,
       );
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e.toString(), type: AppSnackType.error);
@@ -136,8 +144,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         label: 'Password saat ini',
                         controller: _currentController,
                         obscure: _obscureCurrent,
-                        onToggle: (v) =>
-                            setState(() => _obscureCurrent = v),
+                        onToggle: (v) => setState(() => _obscureCurrent = v),
                         hint: 'Password yang sedang aktif',
                         validator: (v) => v == null || v.trim().isEmpty
                             ? 'Password saat ini wajib diisi'
@@ -157,10 +164,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         label: 'Konfirmasi password baru',
                         controller: _confirmController,
                         obscure: _obscureConfirm,
-                        onToggle: (v) =>
-                            setState(() => _obscureConfirm = v),
+                        onToggle: (v) => setState(() => _obscureConfirm = v),
                         hint: 'Ulangi password baru',
-                        validator: _validateNew,
+                        validator: _validateConfirm,
                       ),
                       const SizedBox(height: 12),
                       Text(

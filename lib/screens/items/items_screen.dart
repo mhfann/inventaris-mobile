@@ -28,11 +28,13 @@ class ItemsScreen extends StatefulWidget {
 class _ItemsScreenState extends State<ItemsScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
+  bool _loadingMore = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<ItemProvider>().loadItems(refresh: true);
     });
   }
@@ -51,7 +53,26 @@ class _ItemsScreenState extends State<ItemsScreen> {
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
       context.read<ItemProvider>().setSearch(value);
+    });
+  }
+
+  /// Muat halaman berikutnya di luar fase build.
+  void _loadMore() {
+    if (_loadingMore) return;
+    _loadingMore = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _loadingMore = false;
+        return;
+      }
+      final provider = context.read<ItemProvider>();
+      try {
+        if (provider.hasMore) await provider.loadItems();
+      } finally {
+        _loadingMore = false;
+      }
     });
   }
 
@@ -103,6 +124,8 @@ class _ItemsScreenState extends State<ItemsScreen> {
     final canEdit = auth.can('items.update') || canCreate;
     final canDelete = auth.can('items.delete');
     final canView = auth.can('items.view');
+    final hasSearch =
+        _searchController.text.trim().isNotEmpty || provider.lowStockOnly;
 
     return Scaffold(
       body: Column(
@@ -145,9 +168,8 @@ class _ItemsScreenState extends State<ItemsScreen> {
                     ),
                   ),
                   InkWell(
-                    onTap: () => context.read<ItemProvider>().setLowStockOnly(
-                      false,
-                    ),
+                    onTap: () =>
+                        context.read<ItemProvider>().setLowStockOnly(false),
                     borderRadius: BorderRadius.circular(8),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
@@ -173,10 +195,13 @@ class _ItemsScreenState extends State<ItemsScreen> {
                     onRefresh: () => provider.loadItems(refresh: true),
                     child: provider.items.isEmpty
                         ? _EmptyState(
-                            hasSearch: provider.error == null,
+                            hasSearch: hasSearch,
                             onReset: () {
                               _debounce?.cancel();
                               _searchController.clear();
+                              if (provider.lowStockOnly) {
+                                provider.setLowStockOnly(false);
+                              }
                               provider.setSearch('');
                             },
                           )
@@ -189,7 +214,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
                                 const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               if (index >= provider.items.length) {
-                                provider.loadItems();
+                                _loadMore();
                                 return const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 16),
                                   child: Center(
@@ -204,8 +229,9 @@ class _ItemsScreenState extends State<ItemsScreen> {
                                     item: item,
                                     canEdit: canEdit,
                                     canDelete: canDelete,
-                                    onEdit: () =>
-                                        _openForm(context, item: item),
+                                    onEdit: canEdit
+                                        ? () => _openForm(context, item: item)
+                                        : null,
                                     onView: canView
                                         ? () => _openDetail(context, item)
                                         : null,

@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
+
 import '../core/api/api_client.dart';
-import '../../models/room.dart';
+import '../models/room.dart';
 
 class RoomService {
   RoomService({ApiClient? apiClient}) : _api = apiClient ?? ApiClient.instance;
@@ -7,21 +9,31 @@ class RoomService {
   final ApiClient _api;
 
   Future<List<Room>> all() async {
-    final response = await _api.request('/rooms');
-    final data = response.data is Map<String, dynamic>
-        ? (response.data as Map<String, dynamic>)['data']
-        : null;
+    final Response<dynamic> response = await _api.request('/rooms');
+    final body = response.data;
+    final dynamic data = body is Map ? body['data'] : body;
     if (data is! List) return [];
-    return data.map((e) => Room.fromJson(e as Map<String, dynamic>)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Room.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<Room> create(Map<String, dynamic> payload) async {
-    final response = await _api.request('/rooms', method: 'POST', data: payload);
+    final Response<dynamic> response = await _api.request(
+      '/rooms',
+      method: 'POST',
+      data: payload,
+    );
     return _fromResponse(response);
   }
 
   Future<Room> update(int id, Map<String, dynamic> payload) async {
-    final response = await _api.request('/rooms/$id', method: 'PUT', data: payload);
+    final Response<dynamic> response = await _api.request(
+      '/rooms/$id',
+      method: 'PUT',
+      data: payload,
+    );
     return _fromResponse(response);
   }
 
@@ -29,10 +41,18 @@ class RoomService {
     await _api.request('/rooms/$id', method: 'DELETE');
   }
 
-  Room _fromResponse(dynamic response) {
-    final data = response.data is Map<String, dynamic>
-        ? (response.data as Map<String, dynamic>)['data']
-        : null;
-    return Room.fromJson(data as Map<String, dynamic>);
+  Room _fromResponse(Response<dynamic> response) {
+    final body = response.data;
+    if (body is Map) {
+      final data = body['data'];
+      if (data is Map) {
+        return Room.fromJson(Map<String, dynamic>.from(data));
+      }
+      // Respons tanpa pembungkus "data": objek ruangan langsung di level atas.
+      if (body.containsKey('id')) {
+        return Room.fromJson(Map<String, dynamic>.from(body));
+      }
+    }
+    throw const FormatException('Respons server tidak berisi data ruangan.');
   }
 }

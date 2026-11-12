@@ -18,9 +18,14 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await TokenStorage.readToken();
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+          try {
+            final token = await TokenStorage.readToken();
+            if (token != null && token.isNotEmpty) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
+          } catch (_) {
+            // Gagal membaca token: lanjutkan tanpa Authorization.
+            // Server akan membalas 401 dan user diarahkan ke login.
           }
           handler.next(options);
         },
@@ -77,8 +82,16 @@ class ApiClient {
       onMaintenance?.call();
     }
 
+    if (statusCode != null && statusCode >= 500 && statusCode != 503) {
+      // Jangan tampilkan pesan mentah dari server (mis. "Server Error").
+      return ApiException(
+        'Server sedang bermasalah. Coba lagi nanti.',
+        statusCode: statusCode,
+      );
+    }
+
     if (data is Map<String, dynamic>) {
-      final message = data['message'] as String? ?? 'Terjadi kesalahan.';
+      final message = data['message']?.toString() ?? 'Terjadi kesalahan.';
       final errors = <String, List<String>>{};
       final rawErrors = data['errors'];
       if (rawErrors is Map<String, dynamic>) {
@@ -92,6 +105,7 @@ class ApiClient {
     }
 
     if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
         e.type == DioExceptionType.receiveTimeout) {
       return ApiException('Koneksi ke server timeout. Coba lagi nanti.');
     }

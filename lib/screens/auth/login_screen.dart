@@ -31,6 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final auth = context.read<AuthProvider>();
+    // Cegah login ganda (mis. Enter ditekan lagi saat masih memproses).
+    if (auth.loading) return;
     final success = await auth.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -64,109 +66,146 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Icon(
-                          PhosphorIcons.package,
-                          size: 36,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(duration: 400.ms)
-                        .scale(
-                          begin: const Offset(0.9, 0.9),
-                          duration: 400.ms,
-                          curve: Curves.easeOutBack,
-                        ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Selamat Datang',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineMedium,
-                    )
-                        .animate(delay: 100.ms)
-                        .fadeIn(duration: 400.ms)
-                        .moveY(begin: 8, duration: 400.ms, curve: Curves.easeOut),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Masuk untuk mengelola inventaris sekolah',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium,
-                    )
-                        .animate(delay: 180.ms)
-                        .fadeIn(duration: 400.ms)
-                        .moveY(begin: 8, duration: 400.ms, curve: Curves.easeOut),
-                    const SizedBox(height: 36),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(PhosphorIcons.envelope),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
-                        if (!v.trim().contains('@')) return 'Format email tidak valid';
-                        return null;
-                      },
-                    )
-                        .animate(delay: 260.ms)
-                        .fadeIn(duration: 400.ms)
-                        .moveY(begin: 12, duration: 400.ms, curve: Curves.easeOut),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscure,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(PhosphorIcons.lockSimple),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscure
-                                ? PhosphorIcons.eye
-                                : PhosphorIcons.eyeSlash,
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                            child: Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                              child: Icon(
+                                PhosphorIcons.package,
+                                size: 36,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          )
+                          .animate()
+                          .fadeIn(duration: 400.ms)
+                          .scale(
+                            begin: const Offset(0.9, 0.9),
+                            duration: 400.ms,
+                            curve: Curves.easeOutBack,
                           ),
-                          onPressed: () => setState(() => _obscure = !_obscure),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password wajib diisi';
-                        return null;
-                      },
-                      onFieldSubmitted: (_) => _submit(),
-                    )
-                        .animate(delay: 340.ms)
-                        .fadeIn(duration: 400.ms)
-                        .moveY(begin: 12, duration: 400.ms, curve: Curves.easeOut),
-                    const SizedBox(height: 28),
-                    FilledButton(
-                      onPressed: auth.loading ? null : _submit,
-                      child: auth.loading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.5),
-                            )
-                          : const Text('Masuk'),
-                    )
-                        .animate(delay: 420.ms)
-                        .fadeIn(duration: 400.ms)
-                        .moveY(begin: 12, duration: 400.ms, curve: Curves.easeOut),
-                  ],
+                      const SizedBox(height: 24),
+                      Text(
+                            'Selamat Datang',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.headlineMedium,
+                          )
+                          .animate(delay: 100.ms)
+                          .fadeIn(duration: 400.ms)
+                          .moveY(
+                            begin: 8,
+                            duration: 400.ms,
+                            curve: Curves.easeOut,
+                          ),
+                      const SizedBox(height: 8),
+                      Text(
+                            'Masuk untuk mengelola inventaris sekolah',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium,
+                          )
+                          .animate(delay: 180.ms)
+                          .fadeIn(duration: 400.ms)
+                          .moveY(
+                            begin: 8,
+                            duration: 400.ms,
+                            curve: Curves.easeOut,
+                          ),
+                      const SizedBox(height: 36),
+                      TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.username],
+                            autocorrect: false,
+                            decoration: InputDecoration(
+                              labelText: 'Email',
+                              prefixIcon: Icon(PhosphorIcons.envelope),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty)
+                                return 'Email wajib diisi';
+                              if (!v.trim().contains('@'))
+                                return 'Format email tidak valid';
+                              return null;
+                            },
+                          )
+                          .animate(delay: 260.ms)
+                          .fadeIn(duration: 400.ms)
+                          .moveY(
+                            begin: 12,
+                            duration: 400.ms,
+                            curve: Curves.easeOut,
+                          ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscure,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.password],
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: Icon(PhosphorIcons.lockSimple),
+                              suffixIcon: IconButton(
+                                tooltip: _obscure
+                                    ? 'Tampilkan password'
+                                    : 'Sembunyikan password',
+                                icon: Icon(
+                                  _obscure
+                                      ? PhosphorIcons.eye
+                                      : PhosphorIcons.eyeSlash,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
+                              ),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty)
+                                return 'Password wajib diisi';
+                              return null;
+                            },
+                            onFieldSubmitted: (_) => _submit(),
+                          )
+                          .animate(delay: 340.ms)
+                          .fadeIn(duration: 400.ms)
+                          .moveY(
+                            begin: 12,
+                            duration: 400.ms,
+                            curve: Curves.easeOut,
+                          ),
+                      const SizedBox(height: 28),
+                      FilledButton(
+                            onPressed: auth.loading ? null : _submit,
+                            child: auth.loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : const Text('Masuk'),
+                          )
+                          .animate(delay: 420.ms)
+                          .fadeIn(duration: 400.ms)
+                          .moveY(
+                            begin: 12,
+                            duration: 400.ms,
+                            curve: Curves.easeOut,
+                          ),
+                    ],
+                  ),
                 ),
               ),
             ),

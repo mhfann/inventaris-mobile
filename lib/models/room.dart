@@ -17,4 +17,12 @@ class Room {
         location: json['location'] as String?,
         pic: json['pic'] as String?,
       );
+
+  /// Dua ruangan dianggap sama bila ID-nya sama, supaya pilihan di dropdown
+  /// tetap dikenali setelah daftar ruangan dimuat ulang.
+  @override
+  bool operator ==(Object other) => other is Room && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

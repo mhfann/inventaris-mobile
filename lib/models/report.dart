@@ -1,3 +1,8 @@
+/// Baca angka dari JSON: menerima int, double, maupun string angka.
+/// Nilai kosong/tidak valid menjadi 0.
+int _toInt(Object? value) =>
+    value is num ? value.toInt() : (int.tryParse('$value') ?? 0);
+
 class ReportRow {
   const ReportRow({
     required this.id,
@@ -45,11 +50,11 @@ class ReportRow {
           ? (json['room'] as Map<String, dynamic>)['name'] as String?
           : null,
       condition: json['condition'] as String?,
-      stock: json['stock'] as int? ?? 0,
+      stock: _toInt(json['stock']),
       unit: json['unit'] as String?,
       transactionNumber: json['transaction_number'] as String?,
       date: json['date'] as String?,
-      quantity: json['quantity'] as int? ?? 0,
+      quantity: _toInt(json['quantity']),
       destination: json['destination'] as String?,
       creator: json['created_by'] as String?,
     );
@@ -91,9 +96,7 @@ class ReportData {
       periodLabel: json['period_label'] as String? ?? '',
       rangeFrom: range['from'] as String? ?? '',
       rangeTo: range['to'] as String? ?? '',
-      totals: totalsRaw.map(
-        (key, value) => MapEntry(key, (value as num).toInt()),
-      ),
+      totals: totalsRaw.map((key, value) => MapEntry(key, _toInt(value))),
       rows: (json['rows'] as List? ?? [])
           .map((e) => ReportRow.fromJson(e as Map<String, dynamic>))
           .toList(),

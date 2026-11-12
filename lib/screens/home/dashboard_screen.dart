@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/custom_snackbar.dart';
 import '../../models/dashboard.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/item_provider.dart';
@@ -39,12 +40,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  /// Muat (ulang) data dashboard.
+  /// - Belum ada data sama sekali: gagal -> tampilkan layar error.
+  /// - Sudah ada data: gagal -> data lama tetap tampil, pesan lewat snackbar.
   Future<void> _loadDashboard(ItemProvider provider) async {
     try {
       await provider.loadDashboard();
       if (mounted && _error != null) setState(() => _error = null);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (!mounted) return;
+      if (provider.dashboard == null) {
+        setState(() => _error = e.toString());
+      } else {
+        showAppSnackBar(context, e.toString(), type: AppSnackType.error);
+      }
     }
   }
 
@@ -60,6 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         error: _error,
         userName: auth.user?.name,
         canReports: auth.can('reports.view'),
+        onReload: () => _loadDashboard(provider),
         onLowStockSeeAll: () {
           setState(() => _selectedIndex = 1);
           provider.setLowStockOnly(true);
@@ -108,16 +118,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'Profil',
     ];
 
+    // Jumlah tab berubah bila status admin berubah (mis. saat logout, tab
+    // Master hilang). Jaga indeks agar tidak melewati jumlah tab.
+    final selectedIndex = _selectedIndex < screens.length
+        ? _selectedIndex
+        : screens.length - 1;
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text(titles[_selectedIndex]),
+        title: Text(titles[selectedIndex]),
       ),
-      body: IndexedStack(index: _selectedIndex, children: screens),
+      body: IndexedStack(index: selectedIndex, children: screens),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) =>
-            setState(() => _selectedIndex = index),
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() => _selectedIndex = index);
+          // Kembali ke tab Dashboard: segarkan statistik & stok menipis.
+          if (index == 0) _loadDashboard(provider);
+        },
         destinations: destinations,
       ),
     );
@@ -130,6 +149,7 @@ class _DashboardTab extends StatelessWidget {
     this.error,
     this.userName,
     this.canReports = false,
+    required this.onReload,
     this.onLowStockSeeAll,
   });
 
@@ -137,6 +157,9 @@ class _DashboardTab extends StatelessWidget {
   final String? error;
   final String? userName;
   final bool canReports;
+
+  /// Muat ulang dashboard (dipakai tombol "Coba lagi" dan tarik-untuk-refresh).
+  final Future<void> Function() onReload;
   final VoidCallback? onLowStockSeeAll;
 
   static const _days = [
@@ -163,12 +186,6 @@ class _DashboardTab extends StatelessWidget {
     'Desember',
   ];
 
-  Future<void> _reload() async {
-    try {
-      await provider.loadDashboard();
-    } catch (_) {}
-  }
-
   String _dateLabel() {
     final now = DateTime.now();
     return '${_days[now.weekday - 1]}, ${now.day} ${_months[now.month - 1]} ${now.year}';
@@ -190,20 +207,17 @@ class _DashboardTab extends StatelessWidget {
     if (provider.dashboardLoading && provider.dashboard == null) {
       return const LoadingWidget(text: 'Memuat dashboard...');
     }
-    if (error != null) {
-      return ErrorView(
-        message: error!,
-        onRetry: () => provider.loadDashboard(),
-      );
+    final dashboard = provider.dashboard;
+    if (error != null && dashboard == null) {
+      return ErrorView(message: error!, onRetry: onReload);
     }
 
-    final dashboard = provider.dashboard;
     if (dashboard == null) {
       return const LoadingWidget();
     }
 
     return RefreshIndicator(
-      onRefresh: _reload,
+      onRefresh: onReload,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppTheme.pagePadding,

@@ -37,6 +37,8 @@ class ItemProvider extends ChangeNotifier {
   String _search = '';
   bool _lowStockOnly = false;
   String? _error;
+  bool _referencesLoading = false;
+  String? _referencesError;
 
   List<Item> get items => _items;
   List<Category> get categories => _categories;
@@ -47,6 +49,10 @@ class ItemProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get lowStockOnly => _lowStockOnly;
   String? get error => _error;
+
+  /// Status muat & error khusus kategori + ruangan (data referensi).
+  bool get referencesLoading => _referencesLoading;
+  String? get referencesError => _referencesError;
 
   Future<void> loadItems({bool refresh = false}) async {
     // Muat halaman berikutnya diabaikan bila masih memuat; refresh selalu jalan.
@@ -73,7 +79,12 @@ class ItemProvider extends ChangeNotifier {
       _hasMore = hasMore;
       _page++;
     } catch (e) {
-      if (request == _itemsRequest) _error = e.toString();
+      if (request == _itemsRequest) {
+        _error = e.toString();
+        // Gagal memuat halaman berikutnya: hentikan muat otomatis supaya
+        // tidak mencoba ulang terus-menerus. Refresh akan memulai lagi.
+        if (!refresh) _hasMore = false;
+      }
     } finally {
       if (request == _itemsRequest) {
         _loading = false;
@@ -93,7 +104,12 @@ class ItemProvider extends ChangeNotifier {
     await loadItems(refresh: true);
   }
 
+  /// Muat kategori dan ruangan. Bila gagal, daftar terakhir tetap dipakai
+  /// dan pesannya tersedia lewat [referencesError].
   Future<void> loadReferences() async {
+    _referencesLoading = true;
+    _referencesError = null;
+    notifyListeners();
     try {
       final results = await Future.wait([
         _categoryService.all(),
@@ -101,8 +117,12 @@ class ItemProvider extends ChangeNotifier {
       ]);
       _categories = results[0] as List<Category>;
       _rooms = results[1] as List<Room>;
+    } catch (e) {
+      _referencesError = e.toString();
+    } finally {
+      _referencesLoading = false;
       notifyListeners();
-    } catch (_) {}
+    }
   }
 
   Future<List<Item>> fetchAllItems() async {
@@ -114,16 +134,15 @@ class ItemProvider extends ChangeNotifier {
     return items;
   }
 
+  /// Muat data dashboard. Error diteruskan ke pemanggil (DashboardScreen
+  /// menyimpan pesan error-nya sendiri), jadi `_error` daftar barang tidak
+  /// ikut berubah.
   Future<DashboardData> loadDashboard() async {
     _dashboardLoading = true;
-    _error = null;
     notifyListeners();
     try {
       _dashboard = await _dashboardService.fetch();
       return _dashboard!;
-    } catch (e) {
-      _error = e.toString();
-      rethrow;
     } finally {
       _dashboardLoading = false;
       notifyListeners();

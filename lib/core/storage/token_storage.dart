@@ -11,9 +11,9 @@ class TokenStorage {
   static const _tokenKey = 'auth_token';
   static const _userKey = 'auth_user';
 
-  static Future<String?> readToken() => _storage.read(key: _tokenKey);
+  static Future<String?> readToken() => _safeRead(_tokenKey);
 
-  static Future<String?> readUser() => _storage.read(key: _userKey);
+  static Future<String?> readUser() => _safeRead(_userKey);
 
   static Future<void> saveSession(String token, String userJson) async {
     await _storage.write(key: _tokenKey, value: token);
@@ -21,7 +21,21 @@ class TokenStorage {
   }
 
   static Future<void> clear() async {
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _userKey);
+    try {
+      await _storage.delete(key: _tokenKey);
+      await _storage.delete(key: _userKey);
+    } catch (_) {
+      // Penyimpanan rusak: tidak ada yang bisa dihapus, abaikan.
+    }
+  }
+
+  /// Baca nilai; jika penyimpanan rusak/tidak terbaca, anggap belum login.
+  static Future<String?> _safeRead(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      await clear();
+      return null;
+    }
   }
 }

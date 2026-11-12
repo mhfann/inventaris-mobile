@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/custom_snackbar.dart';
+import '../../providers/auth_provider.dart';
 import '../auth/login_screen.dart';
 import '../home/dashboard_screen.dart';
 
@@ -30,13 +32,15 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
   }
 
   Future<void> _retry() async {
+    final auth = context.read<AuthProvider>();
     setState(() => _checking = true);
     try {
       final response = await ApiClient.instance.request('/status');
       final data = response.data;
-      if (data is Map<String, dynamic> && data['data'] is Map<String, dynamic>) {
-        final threshold = (data['data'] as Map<String, dynamic>)[
-            'low_stock_threshold'];
+      if (data is Map<String, dynamic> &&
+          data['data'] is Map<String, dynamic>) {
+        final threshold =
+            (data['data'] as Map<String, dynamic>)['low_stock_threshold'];
         if (threshold is int) {
           AppConfig.lowStockThreshold = threshold;
         }
@@ -52,16 +56,27 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
       return;
     }
     // Maintenance sudah selesai.
+    // Jika user sedang login, 401 sudah ditangani AuthProvider (kembali ke
+    // halaman login), jadi layar ini tidak perlu menavigasi lagi.
+    final wasAuthenticated = auth.isAuthenticated;
     try {
       await ApiClient.instance.request('/user');
+      // Pulihkan sesi ke AuthProvider. Saat maintenance terjadi ketika
+      // aplikasi baru dibuka, sesi belum sempat dipulihkan; tanpa ini
+      // Dashboard tampil tanpa nama user dan tanpa hak akses.
+      final loggedIn = await auth.restoreSession();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        MaterialPageRoute(
+          builder: (_) =>
+              loggedIn ? const DashboardScreen() : const LoginScreen(),
+        ),
         (route) => false,
       );
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 401) {
+        if (wasAuthenticated) return;
         // Sesi tidak valid: kembali ke halaman login.
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const LoginScreen()),

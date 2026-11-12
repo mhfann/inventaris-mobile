@@ -6,14 +6,19 @@ import '../theme/app_theme.dart';
 enum AppSnackType { info, success, warning, error }
 
 /// Snackbar custom design system: pill/floating, ikon Phosphor, warna semantik.
+///
+/// Bila [duration] tidak diisi: 5 detik untuk error (pesannya biasanya lebih
+/// panjang), 3 detik untuk jenis lain.
 void showAppSnackBar(
   BuildContext context,
   String message, {
   AppSnackType type = AppSnackType.info,
-  Duration duration = const Duration(seconds: 3),
+  Duration? duration,
 }) {
   final theme = Theme.of(context);
   final isLight = theme.brightness == Brightness.light;
+  // Warna teks/ikon di atas latar warna status.
+  final onStatus = isLight ? Colors.white : const Color(0xFF101218);
 
   final IconData icon;
   final Color bg;
@@ -22,15 +27,15 @@ void showAppSnackBar(
     case AppSnackType.success:
       icon = PhosphorIcons.checkCircle;
       bg = context.success;
-      fg = isLight ? Colors.white : const Color(0xFF101218);
+      fg = onStatus;
     case AppSnackType.warning:
       icon = PhosphorIcons.warningCircle;
       bg = context.warning;
-      fg = isLight ? Colors.white : const Color(0xFF101218);
+      fg = onStatus;
     case AppSnackType.error:
       icon = PhosphorIcons.xCircle;
       bg = context.danger;
-      fg = isLight ? Colors.white : const Color(0xFF101218);
+      fg = onStatus;
     case AppSnackType.info:
       icon = PhosphorIcons.info;
       bg = theme.colorScheme.inverseSurface;
@@ -42,7 +47,8 @@ void showAppSnackBar(
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
-        duration: duration,
+        duration:
+            duration ?? Duration(seconds: type == AppSnackType.error ? 5 : 3),
         behavior: SnackBarBehavior.floating,
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -61,6 +67,8 @@ void showAppSnackBar(
               Expanded(
                 child: Text(
                   message,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: fg,
                     fontSize: 13,

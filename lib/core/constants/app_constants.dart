@@ -1,21 +1,16 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart';
-
 class AppConstants {
   AppConstants._();
 
   static const String appName = 'Inventaris Sekolah';
 
-  /// Base URL API backend Laravel.
+  /// Base URL API backend Laravel (server produksi).
   ///
-  /// - Android emulator memakai 10.0.2.2 agar bisa mengakses localhost host.
-  /// - Windows/web/desktop memakai localhost langsung.
-  static String get baseUrl {
-    if (kIsWeb) return 'https://inventaris.mhfann.my.id/api';
-    if (Platform.isAndroid) return 'https://inventaris.mhfann.my.id/api';
-    return 'https://inventaris.mhfann.my.id/api';
-  }
+  /// Untuk development lokal, jalankan dengan
+  /// `flutter run --dart-define=API_BASE_URL=http://localhost:8000/api`.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://inventaris.mhfann.my.id/api',
+  );
 
   static const int perPage = 15;
 }

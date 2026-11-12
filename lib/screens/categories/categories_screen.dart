@@ -131,11 +131,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     final canDelete = auth.can('categories.delete');
 
     Widget body;
-    if (provider.loading && provider.categories.isEmpty) {
+    if (provider.referencesLoading && provider.categories.isEmpty) {
       body = const LoadingWidget(text: 'Memuat kategori...');
-    } else if (provider.error != null && provider.categories.isEmpty) {
+    } else if (provider.referencesError != null &&
+        provider.categories.isEmpty) {
       body = ErrorView(
-        message: provider.error!,
+        message: provider.referencesError!,
         onRetry: () => provider.loadReferences(),
       );
     } else {

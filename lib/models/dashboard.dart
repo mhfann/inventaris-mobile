@@ -1,5 +1,12 @@
 import 'item.dart';
 
+/// Baca angka dari JSON: menerima int, double, maupun string angka.
+int _toInt(Object? value) =>
+    value is num ? value.toInt() : (int.tryParse('$value') ?? 0);
+
+List<int> _toIntList(Object? value) =>
+    value is List ? value.map(_toInt).toList() : const [];
+
 class DashboardStats {
   const DashboardStats({
     this.totalItems = 0,
@@ -18,13 +25,13 @@ class DashboardStats {
   final int lowStock;
 
   factory DashboardStats.fromJson(Map<String, dynamic> json) => DashboardStats(
-        totalItems: json['total_items'] as int? ?? 0,
-        totalCategories: json['total_categories'] as int? ?? 0,
-        totalRooms: json['total_rooms'] as int? ?? 0,
-        totalIncoming: json['total_incoming'] as int? ?? 0,
-        totalOutgoing: json['total_outgoing'] as int? ?? 0,
-        lowStock: json['low_stock'] as int? ?? 0,
-      );
+    totalItems: _toInt(json['total_items']),
+    totalCategories: _toInt(json['total_categories']),
+    totalRooms: _toInt(json['total_rooms']),
+    totalIncoming: _toInt(json['total_incoming']),
+    totalOutgoing: _toInt(json['total_outgoing']),
+    lowStock: _toInt(json['low_stock']),
+  );
 }
 
 class DashboardMonthly {
@@ -40,13 +47,10 @@ class DashboardMonthly {
 
   factory DashboardMonthly.fromJson(Map<String, dynamic> json) =>
       DashboardMonthly(
-        labels: (json['labels'] as List?)?.map((e) => e.toString()).toList() ?? [],
-        incoming:
-            (json['incoming'] as List?)?.map((e) => (e as num).toInt()).toList() ??
-                [],
-        outgoing:
-            (json['outgoing'] as List?)?.map((e) => (e as num).toInt()).toList() ??
-                [],
+        labels:
+            (json['labels'] as List?)?.map((e) => e.toString()).toList() ?? [],
+        incoming: _toIntList(json['incoming']),
+        outgoing: _toIntList(json['outgoing']),
       );
 }
 
@@ -62,13 +66,21 @@ class DashboardData {
   final List<Item> lowStockItems;
 
   factory DashboardData.fromJson(Map<String, dynamic> json) => DashboardData(
-        stats: DashboardStats.fromJson(json['stats'] as Map<String, dynamic>? ?? {}),
-        monthly: DashboardMonthly.fromJson(
-          json['monthly'] as Map<String, dynamic>? ?? {},
-        ),
-        lowStockItems: (json['low_stock_items'] as List?)
-                ?.map((e) => Item.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-      );
+    stats: DashboardStats.fromJson(
+      json['stats'] is Map<String, dynamic>
+          ? json['stats'] as Map<String, dynamic>
+          : const {},
+    ),
+    monthly: DashboardMonthly.fromJson(
+      json['monthly'] is Map<String, dynamic>
+          ? json['monthly'] as Map<String, dynamic>
+          : const {},
+    ),
+    lowStockItems:
+        (json['low_stock_items'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(Item.fromJson)
+            .toList() ??
+        [],
+  );
 }

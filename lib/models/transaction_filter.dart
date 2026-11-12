@@ -9,8 +9,11 @@ class TransactionFilter {
   bool get isEmpty =>
       search == null && from == null && to == null && itemId == null;
 
-  int get activeCount =>
-      [search, from, to, itemId].where((v) => v != null).length;
+  int get activeCount => [
+    search != null,
+    from != null || to != null,
+    itemId != null,
+  ].where((active) => active).length;
 
   TransactionFilter copyWith({
     String? search,

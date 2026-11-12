@@ -8,7 +8,7 @@ enum AuthStatus { unknown, unauthenticated, authenticated }
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthService? authService, this.onSessionExpired})
-      : _authService = authService ?? AuthService() {
+    : _authService = authService ?? AuthService() {
     ApiClient.instance.onUnauthorized = _handleUnauthorized;
   }
 
@@ -60,13 +60,15 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Tandai keluar lebih dulu supaya 401 dari /logout tidak memicu
+    // onSessionExpired (navigasi ke login ditangani pemanggil).
+    _status = AuthStatus.unauthenticated;
     try {
       await _authService.logout();
     } catch (_) {
       // Abaikan error dari server; sesi lokal tetap dibersihkan.
     }
     _user = null;
-    _status = AuthStatus.unauthenticated;
     notifyListeners();
   }
 
